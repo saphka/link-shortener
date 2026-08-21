@@ -1,0 +1,62 @@
+version: "2"
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - golines
+linters:
+  default: standard
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - embeddedstructfieldcheck
+    - err113
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - forcetypeassert
+    - funcorder
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocyclo
+    - godot
+    - gosec
+    - govet
+    - iface
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - iotamixing
+    - loggercheck
+    - nestif
+    - nilnesserr
+    - noctx
+    - predeclared
+    - reassign
+    - recvcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - tagliatelle
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+    # - wrapcheck

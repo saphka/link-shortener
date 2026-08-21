@@ -1,0 +1,78 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: Link Shortener
+  license:
+    name: MIT
+paths:
+  /link:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShortLinkRequest"
+      responses:
+        201:
+          description: Short Link created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShortLink"
+        409:
+          description: Collision with generated key. Try again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      deprecated: false
+  /l/{short-key}:
+    parameters:
+      - name: short-key
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses:
+        302:
+          description: Link found. Redirecting
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: url
+        404:
+          description: Link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      deprecated: false
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          nullable: false
+    ShortLink:
+      type: object
+      properties:
+        key:
+          type: string
+          nullable: false
+        url:
+          type: string
+          format: url
+          nullable: false
+    ShortLinkRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: url
+          nullable: false

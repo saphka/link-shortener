@@ -1,0 +1,10 @@
+.git
+.gitignore
+Dockerfile
+.dockerignore
+README*
+*.md
+tmp/
+bin/
+dist/
+vendor/

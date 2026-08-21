@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      PGDATA: /var/lib/postgresql/17/docker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    ports:
+      - 5432:5432
+    volumes:
+      - pg-volume:/var/lib/postgresql
+    networks:
+      - pg-network
+
+  liquibase:
+    image: liquibase/liquibase:4.33-alpine
+    environment:
+      LIQUIBASE_COMMAND_URL: jdbc:postgresql://postgres:5432/postgres
+      LIQUIBASE_COMMAND_USERNAME: postgres
+      LIQUIBASE_COMMAND_PASSWORD: postgres
+    command: 
+      - --search-path=/liquibase/changelog
+      - update 
+      - --changelog-file=db.changelog-master.yaml
+    volumes:
+      - ./migrations:/liquibase/changelog:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pg-network
+
+volumes:
+  pg-volume: {}
+
+networks:
+  pg-network: {}
