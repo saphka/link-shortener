@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -13,6 +14,13 @@ import (
 )
 
 func main() {
+	err := run()
+	if err != nil {
+		log.Fatalf("error running app: %v", err)
+	}
+}
+
+func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -20,12 +28,13 @@ func main() {
 
 	cfg, err := config.Load(ctx, strcase.UpperSnakeCase(name)+"_")
 	if err != nil {
-		log.Fatalf("cannot load config: %v", err)
+		return fmt.Errorf("cannot load config: %w", err)
 	}
 
 	app, err := app.NewApp(ctx, "link", cfg)
 	if err != nil {
-		log.Fatalf("cannot create app: %s", err)
+		return fmt.Errorf("cannot create app: %w", err)
 	}
-	app.Run()
+	app.Run(ctx)
+	return nil
 }

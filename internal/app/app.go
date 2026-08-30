@@ -16,7 +16,6 @@ import (
 
 type app struct {
 	Name   string
-	ctx    context.Context
 	cfg    config.Config
 	pool   *pgxpool.Pool
 	mux    *http.ServeMux
@@ -38,7 +37,6 @@ func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
 
 	app := &app{
 		Name: name,
-		ctx:  ctx,
 		cfg:  cfg,
 		mux:  mux,
 		pool: pool,
@@ -54,16 +52,19 @@ func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
 	return app, nil
 }
 
-func (a *app) Run() {
+func (a *app) Run(ctx context.Context) {
 	go func() {
 		if err := a.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.ErrorContext(a.ctx, "server start failed.", slog.Any("error", err))
+			slog.ErrorContext(ctx, "server start failed.", slog.Any("error", err))
 		}
 	}()
 
 	slog.Info("application running")
-	<-a.ctx.Done()
-	ctx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownPeriod)
+	<-ctx.Done()
+	ctx, cancel := context.WithTimeout( //nolint:contextcheck
+		context.Background(),
+		a.cfg.ShutdownPeriod,
+	)
 	defer cancel()
 
 	if err := a.server.Shutdown(ctx); err != nil {

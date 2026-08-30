@@ -16,6 +16,12 @@ import (
 
 //go:generate go tool oapi-codegen -config ../../oapi-codegen.yaml ../../api/openApi.yaml
 
+var (
+	errParseUrl          = errors.New("cannot parse url")
+	errSchemeUnsupported = errors.New("unsupported url scheme")
+	errUrlNoHost         = errors.New("link has no host")
+)
+
 type Server struct {
 	repo LinkRepository
 }
@@ -51,20 +57,10 @@ func (s *Server) PostLink(
 	ctx context.Context,
 	request PostLinkRequestObject,
 ) (PostLinkResponseObject, error) {
-	parsedUrl, err := url.Parse(request.Body.Url)
+	err := validateUrl(request.Body.Url)
 	if err != nil {
 		return PostLink400JSONResponse{
-			Message: fmt.Sprintf("cannot parse url: %v", err),
-		}, nil
-	}
-	if parsedUrl.Scheme != "http" && parsedUrl.Scheme != "https" {
-		return PostLink400JSONResponse{
-			Message: fmt.Sprintf("unsupported url scheme: %s", parsedUrl.Scheme),
-		}, nil
-	}
-	if parsedUrl.Host == "" {
-		return PostLink400JSONResponse{
-			Message: "link has no host",
+			Message: err.Error(),
 		}, nil
 	}
 
@@ -89,12 +85,17 @@ func (s *Server) GetLShortKey(
 	shortLink, err := s.repo.GetLink(ctx, request.ShortKey)
 	if err != nil {
 		if errors.Is(err, link.ErrLinkNotFound) {
-			message := err.Error()
 			return GetLShortKey404JSONResponse{
-				Message: message,
+				Message: err.Error(),
 			}, nil
 		}
 		return nil, err
+	}
+	err = validateUrl(shortLink.Url)
+	if err != nil {
+		return GetLShortKey400JSONResponse{
+			Message: err.Error(),
+		}, nil
 	}
 	return GetLShortKey302Response{
 		Headers: GetLShortKey302ResponseHeaders{
@@ -104,7 +105,7 @@ func (s *Server) GetLShortKey(
 }
 
 func createMiddlewares() ([]MiddlewareFunc, error) {
-	result := make([]MiddlewareFunc, 0)
+	result := make([]MiddlewareFunc, 0, 1)
 	rawSpecData, err := rawSpec()
 	if err != nil {
 		return result, err
@@ -128,4 +129,18 @@ func createMiddlewares() ([]MiddlewareFunc, error) {
 	}))
 
 	return result, nil
+}
+
+func validateUrl(rawUrl string) error {
+	parsedUrl, err := url.Parse(rawUrl)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errParseUrl, err)
+	}
+	if parsedUrl.Scheme != "http" && parsedUrl.Scheme != "https" {
+		return fmt.Errorf("%w: %s", errSchemeUnsupported, parsedUrl.Scheme)
+	}
+	if parsedUrl.Host == "" {
+		return errUrlNoHost
+	}
+	return nil
 }

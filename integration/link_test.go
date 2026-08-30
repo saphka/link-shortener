@@ -18,6 +18,7 @@ import (
 	"github.com/saphka/link-shortener/internal/app"
 	"github.com/saphka/link-shortener/internal/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -40,10 +41,18 @@ var dbConn = fmt.Sprintf(
 )
 
 func TestMain(m *testing.M) {
+	exitCode, err := prepareAndRun(m)
+	if err != nil {
+		log.Fatalf("cannot run tests: %v", err)
+	}
+	os.Exit(exitCode)
+}
+
+func prepareAndRun(m *testing.M) (int, error) {
 	var err error
 	stack, err = compose.NewDockerCompose("../docker-compose.yaml")
 	if err != nil {
-		log.Fatalf("cannot create docker compose: %v", err)
+		return 0, fmt.Errorf("cannot create docker compose: %w", err)
 	}
 
 	err = stack.
@@ -53,7 +62,7 @@ func TestMain(m *testing.M) {
 			compose.Wait(true),
 		)
 	if err != nil {
-		log.Fatalf("cannot start docker compose: %v", err)
+		return 0, fmt.Errorf("cannot start docker compose: %w", err)
 	}
 
 	defer func() {
@@ -82,14 +91,12 @@ func TestMain(m *testing.M) {
 		},
 	})
 	if err != nil {
-		log.Fatalf("cannot start app: %v", err)
+		return 0, fmt.Errorf("cannot start app: %w", err)
 	}
 
-	go app.Run()
+	go app.Run(ctx)
 
-	exitCode := m.Run()
-	cancel()
-	os.Exit(exitCode)
+	return m.Run(), nil
 }
 
 func TestLinkCreate(t *testing.T) {
@@ -98,7 +105,7 @@ func TestLinkCreate(t *testing.T) {
 		"application/json",
 		strings.NewReader(`{"url":"https://example.com"}`),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close() //nolint:errcheck
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -108,13 +115,13 @@ func TestLinkCreate(t *testing.T) {
 		Url string `json:"url"`
 	}
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Len(t, respBody.Key, 16)
 	assert.Equal(t, "https://example.com", respBody.Url)
 
 	conn, err := pgx.Connect(context.Background(), dbConn)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer conn.Close(context.Background())
 
 	var rowId int64
@@ -125,13 +132,13 @@ func TestLinkCreate(t *testing.T) {
 			WHERE short_key = $1
 		`, respBody.Key,
 	).Scan(&rowId)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Positive(t, rowId)
 }
 
 func TestLinkRedirect(t *testing.T) {
 	conn, err := pgx.Connect(context.Background(), dbConn)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer conn.Close(context.Background())
 
 	var rowId int64
@@ -143,7 +150,7 @@ func TestLinkRedirect(t *testing.T) {
 			RETURNING id
 		`, "the0short0key", "http://example2.com",
 	).Scan(&rowId)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Positive(t, rowId)
 
 	client := &http.Client{
@@ -153,7 +160,7 @@ func TestLinkRedirect(t *testing.T) {
 	}
 
 	resp, err := client.Get(serverUrl + "/l/the0short0key")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusFound, resp.StatusCode)
@@ -162,7 +169,7 @@ func TestLinkRedirect(t *testing.T) {
 
 func TestNoRedirect(t *testing.T) {
 	conn, err := pgx.Connect(context.Background(), dbConn)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer conn.Close(context.Background())
 
 	var rowId int64
@@ -174,7 +181,7 @@ func TestNoRedirect(t *testing.T) {
 			RETURNING id
 		`, "the0other0key", "http://example3.com",
 	).Scan(&rowId)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Positive(t, rowId)
 
 	client := &http.Client{
@@ -184,7 +191,7 @@ func TestNoRedirect(t *testing.T) {
 	}
 
 	resp, err := client.Get(serverUrl + "/l/the0wrong0key")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
