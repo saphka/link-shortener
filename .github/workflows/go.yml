@@ -16,6 +16,11 @@ jobs:
         run: go mod download
       - name: Build
         run: go build -v ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.2
+          args: --build-tags=integration
       - name: Unit Tests
         run: go test ./...
       - name: Integration Tests

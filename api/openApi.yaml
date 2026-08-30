@@ -55,12 +55,17 @@ components:
   schemas:
     ErrorResponse:
       type: object
+      required:
+        - message
       properties:
         message:
           type: string
           nullable: false
     ShortLink:
       type: object
+      required:
+        - key
+        - url
       properties:
         key:
           type: string
@@ -71,6 +76,8 @@ components:
           nullable: false
     ShortLinkRequest:
       type: object
+      required:
+        - url
       properties:
         url:
           type: string

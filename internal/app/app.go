@@ -29,14 +29,11 @@ func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
 		return nil, fmt.Errorf("cannot create connection pool: %w", err)
 	}
 
-	linkRepo, err := link.NewLinkRepo(pool)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create link repo: %w", err)
-	}
+	linkRepo := link.NewLinkRepo(pool)
 	mux := http.NewServeMux()
 	handler, err := api.NewServer(mux, linkRepo)
 	if err != nil {
-		return nil, fmt.Errorf("canno create handler: %w", err)
+		return nil, fmt.Errorf("cannot create handler: %w", err)
 	}
 
 	app := &app{
@@ -44,11 +41,14 @@ func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
 		ctx:  ctx,
 		cfg:  cfg,
 		mux:  mux,
+		pool: pool,
 		server: &http.Server{
 			Addr:              fmt.Sprintf(":%d", cfg.Port),
 			Handler:           handler,
 			ReadTimeout:       5 * time.Second,
 			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      5 * time.Second,
+			IdleTimeout:       10 * time.Second,
 		},
 	}
 	return app, nil
@@ -56,7 +56,7 @@ func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
 
 func (a *app) Run() {
 	go func() {
-		if err := a.server.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
+		if err := a.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.ErrorContext(a.ctx, "server start failed.", slog.Any("error", err))
 		}
 	}()
@@ -86,6 +86,10 @@ func newPool(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
 			cfg.DB.Name,
 		),
 	)
+	if err != nil {
+		return nil, err
+	}
+	err = pool.Ping(ctx)
 	if err != nil {
 		return nil, err
 	}
