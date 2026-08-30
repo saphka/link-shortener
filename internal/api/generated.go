@@ -23,18 +23,18 @@ import (
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
-	Message *string `json:"message,omitempty"`
+	Message string `json:"message"`
 }
 
 // ShortLink defines model for ShortLink.
 type ShortLink struct {
-	Key *string `json:"key,omitempty"`
-	Url *string `json:"url,omitempty"`
+	Key string `json:"key"`
+	Url string `json:"url"`
 }
 
 // ShortLinkRequest defines model for ShortLinkRequest.
 type ShortLinkRequest struct {
-	Url *string `json:"url,omitempty"`
+	Url string `json:"url"`
 }
 
 // PostLinkJSONRequestBody defines body for PostLink for application/json ContentType.
@@ -247,6 +247,20 @@ func (response GetLShortKey302Response) VisitGetLShortKeyResponse(w http.Respons
 	return nil
 }
 
+type GetLShortKey400JSONResponse ErrorResponse
+
+func (response GetLShortKey400JSONResponse) VisitGetLShortKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetLShortKey404JSONResponse ErrorResponse
 
 func (response GetLShortKey404JSONResponse) VisitGetLShortKeyResponse(w http.ResponseWriter) error {
@@ -279,6 +293,20 @@ func (response PostLink201JSONResponse) VisitPostLinkResponse(w http.ResponseWri
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostLink400JSONResponse ErrorResponse
+
+func (response PostLink400JSONResponse) VisitPostLinkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -408,14 +436,15 @@ func (sh *strictHandler) PostLink(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"vFNNj9NADP0rkeE4NN2PCzmCEFpRJFT2hjgMidvONhnPehxQFOW/Izstq91WCNCKUzK25z0/+80INXWJ",
-	"IkbJUI2Q6x123n7fMROvMSeKGTWQmBKyBLR0hzn7rSVkSAgVZOEQtzBN7hihb3dYC0wOPu+IZRXi/hRo",
-	"j8MZEAc9txrfEHdeoLKz+yuuNd73mOWU8h+hNRTihvRuG2o8zCX6Tqs+3twquwRp9agNFNYKRmRw8B05",
-	"B4pQwcViuVhqLSWMPgWo4MpCDpKXnbVYtuWY9farPQ6TRrZoSlSHl0DxpoEK3qOsjOQDDuCAD+syiKvl",
-	"pX4azDWHJDO3tbWhPjaLYo1NYKxF5TrYoW+Q7eaKaj/Xj8B43wfGBirhHt3BIX8wPp3W9fJaK2uKgtHa",
-	"9ym1YUYv7/JM8QD5knEDFbwoH1xZztlcPvajwZ+RFklmeXNF8uw7FNP1ZYSgdTpjcMe1/RoyuN9ofSru",
-	"6+SgbI9+pnxmNZ8oz46fcTHLG2qGZxvHictN72MF0xNHXC4vnp//3CosWdhCakYv2IC54fX/c8Nbatug",
-	"D674EWRXbPUVaiPFHodFcctD4bc+RDPqNP0cAA==",
+	"xFRNbxMxEP0r1sDRZLcfF/ZYhFBFkVAoXKoe3PVk143X444dqlW0/x3ZTlqaRAWhqpwS289vnt+82TW0",
+	"NHhy6GKAZg2h7XFQ+e9HZuI5Bk8uYNrwTB45GszHA4agunwQR4/QQIhsXAfTJIHxbmUYNTRXD8BruQXS",
+	"zS22ESYJ33rieGHccp9/ieMBbgkrtml/QTyoCE1eyz9ISFzl5rMi5ni3whD3tfxLzcPVEsq4BSU6a1rc",
+	"WOvUkFBfzi+ToGiiTcukSWR16JBBwk/kYMhBA0ezelYnLHl0yhto4CRvSfAq9ll1Zat1SLffLXGc0k6H",
+	"+XHpaSoacucaGviE8SIX+Zxd4k3HM8VJfZx+NIaWjY+ldpa1oJXTMzFHbRjbmByQ0KPSyPnmBbWq4Ne/",
+	"2RJ5hXITsr9wNLl1WtcJ2ZKL6LJ85b01hb26DaXEI+VbxgU08KZ6DHZVTkP1NNKZ/unTzpQWXFIwEz+U",
+	"NTqXEQtlLGrIck5fT0522lEsbheEV6wGjNnmqzWYhEstB7lN0UPPQT5j/a7X15OEym5HkcKBpHylUIa1",
+	"8GKIZ6THF7Njbw6nadp9wbQT0OP66OXrH2pFPhS5IS2jits0/K9wfmcrehXEPZPrROEQxOKG9CgGZdNk",
+	"bTW+fz2NH8hak75R4t7EXnToUoBQiyWOM3HJo1CdMi7P9jT9GgA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

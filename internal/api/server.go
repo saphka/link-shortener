@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	middleware "github.com/oapi-codegen/nethttp-middleware"
@@ -50,17 +51,34 @@ func (s *Server) PostLink(
 	ctx context.Context,
 	request PostLinkRequestObject,
 ) (PostLinkResponseObject, error) {
-	shortLink, err := s.repo.CreateLink(ctx, *request.Body.Url)
+	parsedUrl, err := url.Parse(request.Body.Url)
+	if err != nil {
+		return PostLink400JSONResponse{
+			Message: fmt.Sprintf("cannot parse url: %v", err),
+		}, nil
+	}
+	if parsedUrl.Scheme != "http" && parsedUrl.Scheme != "https" {
+		return PostLink400JSONResponse{
+			Message: fmt.Sprintf("unsupported url scheme: %s", parsedUrl.Scheme),
+		}, nil
+	}
+	if parsedUrl.Host == "" {
+		return PostLink400JSONResponse{
+			Message: "link has no host",
+		}, nil
+	}
+
+	shortLink, err := s.repo.CreateLink(ctx, request.Body.Url)
 	if err != nil {
 		if errors.Is(err, link.ErrLinkKeyConflict) {
 			message := err.Error()
 			return PostLink409JSONResponse{
-				Message: &message,
+				Message: message,
 			}, nil
 		}
 		return nil, fmt.Errorf("cannot create short link. %w", err)
 	}
-	return PostLink201JSONResponse{Key: &shortLink.Key, Url: &shortLink.Url}, nil
+	return PostLink201JSONResponse{Key: shortLink.Key, Url: shortLink.Url}, nil
 }
 
 // (GET /l/{short-key}).
@@ -73,7 +91,7 @@ func (s *Server) GetLShortKey(
 		if errors.Is(err, link.ErrLinkNotFound) {
 			message := err.Error()
 			return GetLShortKey404JSONResponse{
-				Message: &message,
+				Message: message,
 			}, nil
 		}
 		return nil, err
@@ -91,12 +109,15 @@ func createMiddlewares() ([]MiddlewareFunc, error) {
 	if err != nil {
 		return result, err
 	}
-	spec, _ := openapi3.NewLoader().LoadFromData(rawSpecData)
+	spec, err := openapi3.NewLoader().LoadFromData(rawSpecData)
+	if err != nil {
+		return result, fmt.Errorf("cannot load spec: %w", err)
+	}
 
 	result = append(result, middleware.OapiRequestValidatorWithOptions(spec, &middleware.Options{
 		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
 			errorBody := ErrorResponse{
-				Message: &message,
+				Message: message,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(statusCode)

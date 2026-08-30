@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 	defer cancel()
 	app, err := app.NewApp(ctx, "link_test", config.Config{
 		Port:           serverPort,
-		ShutdownPeriod: 200 * time.Microsecond,
+		ShutdownPeriod: 200 * time.Millisecond,
 		DB: config.Database{
 			Host:     localhost,
 			Port:     databasePort,

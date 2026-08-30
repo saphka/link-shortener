@@ -20,6 +20,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ShortLink"
+        400:
+          description: Bad request. Url has wrong schema or body malformed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         409:
           description: Collision with generated key. Try again
           content:
@@ -44,6 +50,12 @@ paths:
               schema:
                 type: string
                 format: url
+        400:
+          description: Bad request. Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         404:
           description: Link not found
           content:
@@ -55,12 +67,17 @@ components:
   schemas:
     ErrorResponse:
       type: object
+      required:
+        - message
       properties:
         message:
           type: string
           nullable: false
     ShortLink:
       type: object
+      required:
+        - key
+        - url
       properties:
         key:
           type: string
@@ -71,6 +88,8 @@ components:
           nullable: false
     ShortLinkRequest:
       type: object
+      required:
+        - url
       properties:
         url:
           type: string

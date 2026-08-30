@@ -2,10 +2,11 @@ package link
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
+	"math/big"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,40 +14,57 @@ import (
 
 var (
 	ErrLinkNotFound    = errors.New("link not found by short key")
-	ErrLinkKeyConflict = errors.New("link short key conflit. try again")
+	ErrLinkKeyConflict = errors.New("link short key conflict. try again")
 )
 
 type linkRepo struct {
 	pool   *pgxpool.Pool
-	keygen func() string
+	keygen func() (string, error)
 }
 
 const keySize int = 16
+const conflictRetries int = 5
 
-func NewLinkRepo(pool *pgxpool.Pool) (*linkRepo, error) {
+func NewLinkRepo(pool *pgxpool.Pool) *linkRepo {
 	return &linkRepo{
 		pool:   pool,
 		keygen: randomString,
-	}, nil
+	}
 }
 
 func (r *linkRepo) CreateLink(ctx context.Context, url string) (ShortLink, error) {
 	var result ShortLink
 
 	return r.doInTxn(ctx, func(ctx context.Context, tx pgx.Tx) (ShortLink, error) {
-		key := r.keygen()
-		err := tx.QueryRow(ctx,
-			`INSERT INTO shortlink(short_key, full_url) 
+		var (
+			hasConflict bool
+			key         string
+			err         error
+		)
+		for range conflictRetries {
+			key, err = r.keygen()
+			if err != nil {
+				return result, fmt.Errorf("cannot create random key: %w", err)
+			}
+			err = tx.QueryRow(ctx,
+				`INSERT INTO shortlink(short_key, full_url) 
 				VALUES ($1, $2) 
-				ON CONFLICT DO NOTHING
+				ON CONFLICT (short_key) DO NOTHING
 				RETURNING id
 			`, key, url,
-		).Scan(&result.Id)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return result, ErrLinkKeyConflict
+			).Scan(&result.Id)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					hasConflict = true
+					continue
+				}
+				return result, fmt.Errorf("cannot scan returned id: %w", err)
 			}
-			return result, fmt.Errorf("cannot scan returned id: %w", err)
+			hasConflict = false
+			break
+		}
+		if hasConflict {
+			return result, ErrLinkKeyConflict
 		}
 		result.Key = key
 		result.Url = url
@@ -77,14 +95,20 @@ func (r *linkRepo) GetLink(ctx context.Context, key string) (ShortLink, error) {
 	)
 }
 
-func randomString() string {
+func randomString() (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, keySize)
+	charsetLen := big.NewInt(int64(len(charset)))
 
 	for i := range result {
-		result[i] = charset[rand.IntN(len(charset))] //nolint:gosec
+		randInt, err := rand.Int(rand.Reader, charsetLen)
+		if err != nil {
+			return "", fmt.Errorf("cannot generate random int: %w", err)
+		}
+
+		result[i] = charset[randInt.Int64()]
 	}
-	return string(result)
+	return string(result), nil
 }
 
 func (r *linkRepo) doInConnection(
@@ -93,7 +117,7 @@ func (r *linkRepo) doInConnection(
 ) (ShortLink, error) {
 	pooledConn, err := r.pool.Acquire(ctx)
 	if err != nil {
-		return ShortLink{}, fmt.Errorf("cannot accuire connection: %w", err)
+		return ShortLink{}, fmt.Errorf("cannot acquire connection: %w", err)
 	}
 	defer pooledConn.Release()
 

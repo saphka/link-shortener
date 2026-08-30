@@ -2,19 +2,20 @@ databaseChangeLog:
   - changeSet:
       id: init-schema-1
       author: saphka
-      changes: 
+      changes:
         - createTable:
             tableName: shortlink
             columns:
               - column:
                   name: id
-                  type: serial
+                  type: bigint
+                  autoIncrement: true
                   constraints:
                     nullable: false
                     primaryKey: true
               - column:
                   name: short_key
-                  type: nvarchar(20)
+                  type: varchar(20)
                   constraints:
                     nullable: false
                     unique: true
