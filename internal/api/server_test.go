@@ -172,6 +172,29 @@ func TestErrorReadLink(t *testing.T) {
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 }
 
+func TestBadRedirect(t *testing.T) {
+	createLink("bad_protocol_key", "file:///etc/hosts")
+
+	req, err := http.NewRequest(
+		http.MethodGet,
+		server.URL+"/l/bad_protocol_key",
+		strings.NewReader(""),
+	)
+	assert.NoError(t, err)
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var respBody ErrorResponse
+	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	assert.NoError(t, err)
+	assert.Contains(t, respBody.Message, "unsupported url scheme")
+}
+
 func TestBadRequest(t *testing.T) {
 	req, err := http.NewRequest(
 		http.MethodPost,
