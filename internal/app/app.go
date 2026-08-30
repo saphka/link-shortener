@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -15,11 +16,12 @@ import (
 )
 
 type app struct {
-	Name   string
-	cfg    config.Config
-	pool   *pgxpool.Pool
-	mux    *http.ServeMux
-	server *http.Server
+	Name     string
+	cfg      config.Config
+	pool     *pgxpool.Pool
+	mux      *http.ServeMux
+	listener net.Listener
+	server   *http.Server
 }
 
 func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
@@ -32,16 +34,24 @@ func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
 	mux := http.NewServeMux()
 	handler, err := api.NewServer(mux, linkRepo)
 	if err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("cannot create handler: %w", err)
 	}
 
+	var lc net.ListenConfig
+	listener, err := lc.Listen(ctx, "tcp", fmt.Sprintf(":%d", cfg.Port))
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("cannot listen on port %d: %w", cfg.Port, err)
+	}
+
 	app := &app{
-		Name: name,
-		cfg:  cfg,
-		mux:  mux,
-		pool: pool,
+		Name:     name,
+		cfg:      cfg,
+		mux:      mux,
+		pool:     pool,
+		listener: listener,
 		server: &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Port),
 			Handler:           handler,
 			ReadTimeout:       5 * time.Second,
 			ReadHeaderTimeout: 5 * time.Second,
@@ -54,7 +64,7 @@ func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
 
 func (a *app) Run(ctx context.Context) {
 	go func() {
-		if err := a.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := a.server.Serve(a.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.ErrorContext(ctx, "server start failed.", slog.Any("error", err))
 		}
 	}()
