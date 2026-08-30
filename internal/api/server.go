@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	middleware "github.com/oapi-codegen/nethttp-middleware"
@@ -50,6 +51,23 @@ func (s *Server) PostLink(
 	ctx context.Context,
 	request PostLinkRequestObject,
 ) (PostLinkResponseObject, error) {
+	parsedUrl, err := url.Parse(request.Body.Url)
+	if err != nil {
+		return PostLink400JSONResponse{
+			Message: fmt.Sprintf("cannot parse url: %v", err),
+		}, nil
+	}
+	if parsedUrl.Scheme != "http" && parsedUrl.Scheme != "https" {
+		return PostLink400JSONResponse{
+			Message: fmt.Sprintf("unsupported url scheme: %s", parsedUrl.Scheme),
+		}, nil
+	}
+	if parsedUrl.Host == "" {
+		return PostLink400JSONResponse{
+			Message: "link has no host",
+		}, nil
+	}
+
 	shortLink, err := s.repo.CreateLink(ctx, request.Body.Url)
 	if err != nil {
 		if errors.Is(err, link.ErrLinkKeyConflict) {

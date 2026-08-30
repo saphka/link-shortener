@@ -23,6 +23,7 @@ type linkRepo struct {
 }
 
 const keySize int = 16
+const conflictRetries int = 5
 
 func NewLinkRepo(pool *pgxpool.Pool) *linkRepo {
 	return &linkRepo{
@@ -35,22 +36,35 @@ func (r *linkRepo) CreateLink(ctx context.Context, url string) (ShortLink, error
 	var result ShortLink
 
 	return r.doInTxn(ctx, func(ctx context.Context, tx pgx.Tx) (ShortLink, error) {
-		key, err := r.keygen()
-		if err != nil {
-			return result, fmt.Errorf("cannot create random key: %w", err)
-		}
-		err = tx.QueryRow(ctx,
-			`INSERT INTO shortlink(short_key, full_url) 
+		var (
+			hasConflict bool
+			key         string
+			err         error
+		)
+		for range conflictRetries {
+			key, err = r.keygen()
+			if err != nil {
+				return result, fmt.Errorf("cannot create random key: %w", err)
+			}
+			err = tx.QueryRow(ctx,
+				`INSERT INTO shortlink(short_key, full_url) 
 				VALUES ($1, $2) 
 				ON CONFLICT (short_key) DO NOTHING
 				RETURNING id
 			`, key, url,
-		).Scan(&result.Id)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return result, ErrLinkKeyConflict
+			).Scan(&result.Id)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					hasConflict = true
+					continue
+				}
+				return result, fmt.Errorf("cannot scan returned id: %w", err)
 			}
-			return result, fmt.Errorf("cannot scan returned id: %w", err)
+			hasConflict = false
+			break
+		}
+		if hasConflict {
+			return result, ErrLinkKeyConflict
 		}
 		result.Key = key
 		result.Url = url

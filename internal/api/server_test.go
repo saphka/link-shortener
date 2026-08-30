@@ -179,6 +179,7 @@ func TestBadRequest(t *testing.T) {
 		strings.NewReader(`{"url":null}`),
 	)
 	assert.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
@@ -186,6 +187,77 @@ func TestBadRequest(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var respBody ErrorResponse
+	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	assert.NoError(t, err)
+	assert.Contains(t, respBody.Message, "request body has an error")
+}
+
+func TestBadUrl(t *testing.T) {
+	req, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/link",
+		strings.NewReader(`{"url":":iAmNotAUrl"}`),
+	)
+	assert.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var respBody ErrorResponse
+	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	assert.NoError(t, err)
+	assert.Contains(t, respBody.Message, "cannot parse url")
+}
+
+func TestBadUrlScheme(t *testing.T) {
+	req, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/link",
+		strings.NewReader(`{"url":"fille:///etc/hosts"}`),
+	)
+	assert.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var respBody ErrorResponse
+	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	assert.NoError(t, err)
+	assert.Contains(t, respBody.Message, "unsupported url scheme")
+}
+
+func TestBadHost(t *testing.T) {
+	req, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/link",
+		strings.NewReader(`{"url":"http://"}`),
+	)
+	assert.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var respBody ErrorResponse
+	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	assert.NoError(t, err)
+	assert.Contains(t, respBody.Message, "link has no host")
 }
 
 func createLink(key, url string) {
