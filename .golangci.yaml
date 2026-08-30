@@ -12,6 +12,7 @@ linters:
     - bidichk
     - bodyclose
     - canonicalheader
+    - containedctx
     - contextcheck
     - copyloopvar
     - cyclop
@@ -35,6 +36,7 @@ linters:
     - gochecknoinits
     - gocognit
     - goconst
+    - gocritic
     - gocyclo
     - godot
     - gosec
@@ -45,9 +47,13 @@ linters:
     - interfacebloat
     - iotamixing
     - loggercheck
+    - misspell
+    - modernize
     - nestif
     - nilnesserr
     - noctx
+    - perfsprint
+    - prealloc
     - predeclared
     - reassign
     - recvcheck
@@ -55,8 +61,11 @@ linters:
     - spancheck
     - sqlclosecheck
     - tagliatelle
+    - testifylint
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
+    - usetesting
     - whitespace
     # - wrapcheck

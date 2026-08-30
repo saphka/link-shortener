@@ -15,6 +15,7 @@ import (
 
 	"github.com/saphka/link-shortener/internal/repository/link"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type inMemoryLinkRepository struct {
@@ -60,6 +61,14 @@ var client *http.Client
 var repo *inMemoryLinkRepository
 
 func TestMain(m *testing.M) {
+	exitCode, err := prepareAndRun(m)
+	if err != nil {
+		log.Fatalf("cannot run tests: %v", err)
+	}
+	os.Exit(exitCode)
+}
+
+func prepareAndRun(m *testing.M) (int, error) {
 	repo = &inMemoryLinkRepository{
 		lock: &sync.RWMutex{},
 		data: make(map[string]link.ShortLink),
@@ -68,7 +77,7 @@ func TestMain(m *testing.M) {
 	mux := http.NewServeMux()
 	linkServer, err := NewServer(mux, repo)
 	if err != nil {
-		log.Fatalf("cannot create handler: %v", err)
+		return 0, fmt.Errorf("cannot create handler: %w", err)
 	}
 
 	server = httptest.NewServer(linkServer)
@@ -80,8 +89,7 @@ func TestMain(m *testing.M) {
 		},
 	}
 
-	exitCode := m.Run()
-	os.Exit(exitCode)
+	return m.Run(), nil
 }
 
 func TestCreateLink(t *testing.T) {
@@ -90,11 +98,11 @@ func TestCreateLink(t *testing.T) {
 		server.URL+"/link",
 		strings.NewReader(`{"url":"http://example.com"}`),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -105,8 +113,8 @@ func TestCreateLink(t *testing.T) {
 		Url string `json:"url"`
 	}
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	assert.NoError(t, err)
-	assert.True(t, strings.Contains(respBody.Key, "randomKkey"))
+	require.NoError(t, err)
+	assert.Contains(t, respBody.Key, "randomKkey")
 
 	repo.lock.RLock()
 	defer repo.lock.RUnlock()
@@ -127,11 +135,11 @@ func TestCreateLinkConflict(t *testing.T) {
 		server.URL+"/link",
 		strings.NewReader(`{"url":"http://example5.com"}`),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusConflict, resp.StatusCode)
@@ -148,10 +156,10 @@ func TestReadLink(t *testing.T) {
 	createLink("testLink01", "http://example2.com")
 
 	req, err := http.NewRequest(http.MethodGet, server.URL+"/l/testLink01", strings.NewReader(""))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusFound, resp.StatusCode)
@@ -162,10 +170,10 @@ func TestErrorReadLink(t *testing.T) {
 	createLink("testLink02", "http://example3.com")
 
 	req, err := http.NewRequest(http.MethodGet, server.URL+"/l/tesOther01", strings.NewReader(""))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -180,10 +188,10 @@ func TestBadRedirect(t *testing.T) {
 		server.URL+"/l/bad_protocol_key",
 		strings.NewReader(""),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -191,7 +199,7 @@ func TestBadRedirect(t *testing.T) {
 
 	var respBody ErrorResponse
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, respBody.Message, "unsupported url scheme")
 }
 
@@ -201,11 +209,11 @@ func TestBadRequest(t *testing.T) {
 		server.URL+"/link",
 		strings.NewReader(`{"url":null}`),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -213,7 +221,7 @@ func TestBadRequest(t *testing.T) {
 
 	var respBody ErrorResponse
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, respBody.Message, "request body has an error")
 }
 
@@ -223,11 +231,11 @@ func TestBadUrl(t *testing.T) {
 		server.URL+"/link",
 		strings.NewReader(`{"url":":iAmNotAUrl"}`),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -235,7 +243,7 @@ func TestBadUrl(t *testing.T) {
 
 	var respBody ErrorResponse
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, respBody.Message, "cannot parse url")
 }
 
@@ -245,11 +253,11 @@ func TestBadUrlScheme(t *testing.T) {
 		server.URL+"/link",
 		strings.NewReader(`{"url":"fille:///etc/hosts"}`),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -257,7 +265,7 @@ func TestBadUrlScheme(t *testing.T) {
 
 	var respBody ErrorResponse
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, respBody.Message, "unsupported url scheme")
 }
 
@@ -267,11 +275,11 @@ func TestBadHost(t *testing.T) {
 		server.URL+"/link",
 		strings.NewReader(`{"url":"http://"}`),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -279,7 +287,7 @@ func TestBadHost(t *testing.T) {
 
 	var respBody ErrorResponse
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, respBody.Message, "link has no host")
 }
 

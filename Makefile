@@ -16,7 +16,7 @@ fmt:
 	@golangci-lint fmt
 
 lint: fmt
-	@golangci-lint run
+	@golangci-lint run --build-tags=integration
 
 test:
 	@go test ./...

@@ -17,9 +17,9 @@ import (
 //go:generate go tool oapi-codegen -config ../../oapi-codegen.yaml ../../api/openApi.yaml
 
 var (
-	ErrParseUrl          = errors.New("cannot parse url")
-	ErrSchemeUnsupported = errors.New("unsupported url scheme")
-	ErrUrlNoHost         = errors.New("link has no host")
+	errParseUrl          = errors.New("cannot parse url")
+	errSchemeUnsupported = errors.New("unsupported url scheme")
+	errUrlNoHost         = errors.New("link has no host")
 )
 
 type Server struct {
@@ -105,7 +105,7 @@ func (s *Server) GetLShortKey(
 }
 
 func createMiddlewares() ([]MiddlewareFunc, error) {
-	result := make([]MiddlewareFunc, 0)
+	result := make([]MiddlewareFunc, 0, 1)
 	rawSpecData, err := rawSpec()
 	if err != nil {
 		return result, err
@@ -134,13 +134,13 @@ func createMiddlewares() ([]MiddlewareFunc, error) {
 func validateUrl(rawUrl string) error {
 	parsedUrl, err := url.Parse(rawUrl)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrParseUrl, err)
+		return fmt.Errorf("%w: %w", errParseUrl, err)
 	}
 	if parsedUrl.Scheme != "http" && parsedUrl.Scheme != "https" {
-		return fmt.Errorf("%w: %s", ErrSchemeUnsupported, parsedUrl.Scheme)
+		return fmt.Errorf("%w: %s", errSchemeUnsupported, parsedUrl.Scheme)
 	}
 	if parsedUrl.Host == "" {
-		return ErrUrlNoHost
+		return errUrlNoHost
 	}
 	return nil
 }
