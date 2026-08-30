@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: init-schema-1
+      author: saphka
+      changes: 
+        - createTable:
+            tableName: shortlink
+            columns:
+              - column:
+                  name: id
+                  type: serial
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: short_key
+                  type: nvarchar(20)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: full_url
+                  type: text
+                  constraints:
+                    nullable: false
