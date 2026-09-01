@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/saphka/link-shortener/internal/api"
 	"github.com/saphka/link-shortener/internal/config"
+	"github.com/saphka/link-shortener/internal/database"
 	"github.com/saphka/link-shortener/internal/repository/link"
 )
 
@@ -25,14 +28,22 @@ type app struct {
 }
 
 func NewApp(ctx context.Context, name string, cfg config.Config) (*app, error) {
-	pool, err := newPool(ctx, cfg)
+	promReg := prometheus.NewRegistry()
+	promReg.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
+
+	pool, err := database.NewPool(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create connection pool: %w", err)
 	}
+	database.RegisterPoolMetrics(pool, promReg)
 
 	linkRepo := link.NewLinkRepo(pool)
 	mux := http.NewServeMux()
-	handler, err := api.NewServer(mux, linkRepo)
+	api.SetupMetricsEndpoint(mux, promReg)
+	handler, err := api.NewServer(mux, promReg, linkRepo)
 	if err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("cannot create handler: %w", err)
@@ -83,26 +94,4 @@ func (a *app) Run(ctx context.Context) {
 	a.pool.Close()
 
 	slog.Info("server exited properly")
-}
-
-func newPool(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(
-		ctx,
-		fmt.Sprintf(
-			"postgres://%s:%s@%s:%d/%s",
-			cfg.DB.User,
-			cfg.DB.Password,
-			cfg.DB.Host,
-			cfg.DB.Port,
-			cfg.DB.Name,
-		),
-	)
-	if err != nil {
-		return nil, err
-	}
-	err = pool.Ping(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return pool, nil
 }

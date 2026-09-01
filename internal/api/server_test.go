@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/saphka/link-shortener/internal/repository/link"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,6 +60,7 @@ func (i *inMemoryLinkRepository) GetLink(ctx context.Context, key string) (link.
 var server *httptest.Server
 var client *http.Client
 var repo *inMemoryLinkRepository
+var promRegistry *prometheus.Registry
 
 func TestMain(m *testing.M) {
 	exitCode, err := prepareAndRun(m)
@@ -74,8 +76,10 @@ func prepareAndRun(m *testing.M) (int, error) {
 		data: make(map[string]link.ShortLink),
 	}
 
+	promRegistry = prometheus.NewRegistry()
+
 	mux := http.NewServeMux()
-	linkServer, err := NewServer(mux, repo)
+	linkServer, err := NewServer(mux, promRegistry, repo)
 	if err != nil {
 		return 0, fmt.Errorf("cannot create handler: %w", err)
 	}

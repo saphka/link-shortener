@@ -11,6 +11,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	middleware "github.com/oapi-codegen/nethttp-middleware"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/saphka/link-shortener/internal/repository/link"
 )
 
@@ -31,12 +32,16 @@ type LinkRepository interface {
 	GetLink(ctx context.Context, key string) (link.ShortLink, error)
 }
 
-func NewServer(mux *http.ServeMux, repo LinkRepository) (http.Handler, error) {
+func NewServer(
+	mux *http.ServeMux,
+	promReg prometheus.Registerer,
+	repo LinkRepository,
+) (http.Handler, error) {
 	server := &Server{
 		repo: repo,
 	}
 
-	mw, err := createMiddlewares()
+	mw, err := createMiddlewares(promReg)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create middlewares: %w", err)
 	}
@@ -104,18 +109,28 @@ func (s *Server) GetLShortKey(
 	}, nil
 }
 
-func createMiddlewares() ([]MiddlewareFunc, error) {
-	result := make([]MiddlewareFunc, 0, 1)
+func createMiddlewares(promReg prometheus.Registerer) ([]MiddlewareFunc, error) {
+	result := make([]MiddlewareFunc, 0, 2)
+	result = append(result, createMetricsMiddleware(promReg))
+	if mw, err := createOapiValidator(); err != nil {
+		return nil, fmt.Errorf("cannot create oapi validator: %w", err)
+	} else {
+		result = append(result, mw)
+	}
+	return result, nil
+}
+
+func createOapiValidator() (MiddlewareFunc, error) {
 	rawSpecData, err := rawSpec()
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 	spec, err := openapi3.NewLoader().LoadFromData(rawSpecData)
 	if err != nil {
-		return result, fmt.Errorf("cannot load spec: %w", err)
+		return nil, fmt.Errorf("cannot load spec: %w", err)
 	}
 
-	result = append(result, middleware.OapiRequestValidatorWithOptions(spec, &middleware.Options{
+	return middleware.OapiRequestValidatorWithOptions(spec, &middleware.Options{
 		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
 			errorBody := ErrorResponse{
 				Message: message,
@@ -126,9 +141,7 @@ func createMiddlewares() ([]MiddlewareFunc, error) {
 				slog.Error("cannot write error body", slog.Any("error", err))
 			}
 		},
-	}))
-
-	return result, nil
+	}), nil
 }
 
 func validateUrl(rawUrl string) error {
